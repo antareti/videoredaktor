@@ -8,6 +8,10 @@ import { editImageWithGemini, generateVideoFromImage } from './services/geminiSe
 import { fileToBase64 } from './utils/fileUtils';
 import type { GeminiResponse } from './types';
 
+// IMPORTANT: The API key is now expected to be in the environment variables.
+// This is a security best practice.
+const API_KEY = process.env.API_KEY;
+
 const imagePromptSuggestions = [
   'Нарисуйте этого человека в купальнике на солнечном тропическом пляже.',
   'Поместите этого человека в бальный зал, одев в элегантное вечернее платье.',
@@ -35,8 +39,6 @@ const videoLoadingMessages = [
 
 
 export default function App() {
-  const [apiKey, setApiKey] = useState<string>('');
-  const [apiKeyInput, setApiKeyInput] = useState<string>('');
   const [originalImage, setOriginalImage] = useState<File | null>(null);
   const [originalImagePreview, setOriginalImagePreview] = useState<string | null>(null);
   const [editedImage, setEditedImage] = useState<string | null>(null);
@@ -48,32 +50,12 @@ export default function App() {
   const [activeMode, setActiveMode] = useState<'image' | 'video'>('image');
 
   useEffect(() => {
-    const storedApiKey = localStorage.getItem('gemini-api-key');
-    if (storedApiKey) {
-      setApiKey(storedApiKey);
-    }
-  }, []);
-
-  useEffect(() => {
     if (activeMode === 'image') {
         setPrompt(imagePromptSuggestions[0]);
     } else {
         setPrompt(videoPromptSuggestions[0]);
     }
   }, [activeMode]);
-
-  const handleApiKeySave = () => {
-    if (apiKeyInput.trim()) {
-      setApiKey(apiKeyInput.trim());
-      localStorage.setItem('gemini-api-key', apiKeyInput.trim());
-    }
-  };
-  
-  const handleApiKeyChange = () => {
-      setApiKey('');
-      setApiKeyInput('');
-      localStorage.removeItem('gemini-api-key');
-  }
 
   const handleImageUpload = useCallback((file: File) => {
     setOriginalImage(file);
@@ -88,7 +70,7 @@ export default function App() {
   }, []);
 
   const handleProcessImage = async () => {
-    if (!originalImage || !apiKey) return;
+    if (!originalImage || !API_KEY) return;
 
     setIsLoading(true);
     setLoadingMessage('ИИ творит магию...');
@@ -99,7 +81,7 @@ export default function App() {
       const base64Image = await fileToBase64(originalImage);
       const mimeType = originalImage.type;
       
-      const result: GeminiResponse | null = await editImageWithGemini(base64Image, mimeType, prompt, apiKey);
+      const result: GeminiResponse | null = await editImageWithGemini(base64Image, mimeType, prompt, API_KEY);
 
       if (result && result.image) {
         setEditedImage(`data:image/png;base64,${result.image}`);
@@ -109,7 +91,7 @@ export default function App() {
     } catch (err) {
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : 'Произошла неизвестная ошибка.';
-      setError(`Произошла ошибка: ${errorMessage}. Проверьте правильность вашего API ключа и обновите страницу.`);
+      setError(`Произошла ошибка: ${errorMessage}.`);
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
@@ -117,7 +99,7 @@ export default function App() {
   };
 
   const handleGenerateVideo = async () => {
-    if (!originalImage || !apiKey) return;
+    if (!originalImage || !API_KEY) return;
 
     setIsLoading(true);
     setError(null);
@@ -136,13 +118,13 @@ export default function App() {
         const base64Image = await fileToBase64(originalImage);
         const mimeType = originalImage.type;
 
-        const videoUrl = await generateVideoFromImage(base64Image, mimeType, prompt, apiKey);
+        const videoUrl = await generateVideoFromImage(base64Image, mimeType, prompt, API_KEY);
 
         setGeneratedVideo(videoUrl);
     } catch (err) {
         console.error(err);
         const errorMessage = err instanceof Error ? err.message : 'Произошла неизвестная ошибка.';
-        setError(`Произошла ошибка при создании видео: ${errorMessage}. Проверьте правильность вашего API ключа и обновите страницу.`);
+        setError(`Произошла ошибка при создании видео: ${errorMessage}.`);
     } finally {
         clearInterval(intervalId);
         setIsLoading(false);
@@ -170,29 +152,16 @@ export default function App() {
 
   const currentSuggestions = activeMode === 'image' ? imagePromptSuggestions : videoPromptSuggestions;
   
-  if (!apiKey) {
+  if (!API_KEY) {
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-900 to-slate-800 text-gray-200 font-sans flex items-center justify-center p-4">
-             <div className="w-full max-w-md mx-auto bg-gray-800/50 rounded-2xl shadow-2xl backdrop-blur-md border border-gray-700/50 p-8 text-center">
-                <h2 className="text-2xl font-bold mb-4 text-white">Требуется API Ключ Gemini</h2>
-                <p className="text-gray-400 mb-6">
-                    Чтобы использовать приложение, пожалуйста, введите ваш API-ключ от Google AI Studio. Он будет сохранен только в вашем браузере.
+             <div className="w-full max-w-md mx-auto bg-red-900/30 rounded-2xl shadow-2xl backdrop-blur-md border border-red-700/50 p-8 text-center">
+                <h2 className="text-2xl font-bold mb-4 text-red-300">Ошибка Конфигурации</h2>
+                <p className="text-gray-300">
+                    API-ключ Gemini не найден. Приложение не может работать без него.
                 </p>
-                <input
-                    type="password"
-                    value={apiKeyInput}
-                    onChange={(e) => setApiKeyInput(e.target.value)}
-                    placeholder="Введите ваш API ключ..."
-                    className="w-full p-3 bg-gray-900/70 border border-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-300"
-                />
-                <button
-                    onClick={handleApiKeySave}
-                    className="mt-6 w-full px-8 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-lg transition-all duration-300 shadow-xl"
-                >
-                    Сохранить и начать
-                </button>
-                <p className="text-xs text-gray-500 mt-4">
-                    Получить ключ можно на <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">сайте Google AI Studio</a>.
+                 <p className="text-xs text-gray-400 mt-4">
+                    Убедитесь, что переменная окружения API_KEY была правильно настроена перед сборкой проекта.
                 </p>
             </div>
         </div>
@@ -314,9 +283,6 @@ export default function App() {
         </div>
         <footer className="text-center mt-12 text-gray-500 text-sm">
           <p>Создано с помощью Google Gemini. Пожалуйста, используйте этот инструмент ответственно.</p>
-           <button onClick={handleApiKeyChange} className="mt-2 text-xs text-gray-600 hover:text-gray-400 underline">
-                Сменить API ключ
-           </button>
         </footer>
       </main>
     </div>
